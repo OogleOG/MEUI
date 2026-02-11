@@ -1,0 +1,722 @@
+================================================================================
+  MEUI COMPARISON — SanctumGUI.lua (Manual) vs MEUI.lua (Library)
+================================================================================
+
+This document compares the current SanctumGUI.lua (622 lines of hand-written
+ImGui code) with what the same GUI would look like using MEUI.lua.
+
+
+================================================================================
+  LINE COUNT COMPARISON
+================================================================================
+
+  SanctumGUI.lua (current, manual)     →  622 lines
+  SanctumGUI.lua (using MEUI)          →  ~90 lines
+
+  That's an 85% reduction in code.
+
+
+================================================================================
+  1. STATE MANAGEMENT — What you had to write manually
+================================================================================
+
+BEFORE (SanctumGUI.lua — 23 lines):
+────────────────────────────────────
+
+    local SanctumGUI = {}
+
+    SanctumGUI.open = true
+    SanctumGUI.started = false
+    SanctumGUI.paused = false
+    SanctumGUI.stopped = false
+    SanctumGUI.cancelled = false
+    SanctumGUI.warnings = {}
+    SanctumGUI.selectConfigTab = true
+    SanctumGUI.selectInfoTab = false
+    SanctumGUI.selectWarningsTab = false
+
+    function SanctumGUI.reset()
+        SanctumGUI.open = true
+        SanctumGUI.started = false
+        SanctumGUI.paused = false
+        SanctumGUI.stopped = false
+        SanctumGUI.cancelled = false
+        SanctumGUI.warnings = {}
+        SanctumGUI.selectConfigTab = true
+        SanctumGUI.selectInfoTab = false
+        SanctumGUI.selectWarningsTab = false
+    end
+
+AFTER (MEUI — 0 lines):
+────────────────────────
+
+    -- All handled internally by MEUI.Window()
+    -- Access via ui:isStarted(), ui:isPaused(), ui:isStopped(), ui:reset()
+
+
+================================================================================
+  2. THEME / COLOR PALETTE — What you had to copy-paste every time
+================================================================================
+
+BEFORE (SanctumGUI.lua — 30 lines):
+────────────────────────────────────
+
+    local TEAL = {
+        dark   = { 0.06, 0.08, 0.10 },
+        medium = { 0.08, 0.18, 0.25 },
+        light  = { 0.15, 0.35, 0.45 },
+        bright = { 0.25, 0.55, 0.65 },
+        glow   = { 0.40, 0.80, 0.90 },
+    }
+
+    local STATE_COLORS = {
+        ["War's Retreat"]     = { 0.3, 0.8, 0.4 },
+        ["Banking"]           = { 0.3, 0.8, 0.4 },
+        ["Altar"]             = { 0.3, 0.8, 0.4 },
+        ["Bonfire"]           = { 0.3, 0.8, 0.4 },
+        ["Adrenaline"]        = { 0.3, 0.8, 0.4 },
+        ["Entering Portal"]   = { 0.5, 0.7, 0.9 },
+        ["Entering Instance"] = { 0.5, 0.7, 0.9 },
+        ["Vermyx"]            = { 1.0, 0.85, 0.2 },
+        ["Kezalam"]           = { 1.0, 0.55, 0.2 },
+        ["Nakatra"]           = { 1.0, 0.3, 0.3 },
+        ["Transition"]        = { 0.6, 0.6, 0.8 },
+        ["Looting"]           = { 0.4, 0.85, 0.9 },
+        ["Teleporting"]       = { 0.6, 0.9, 1.0 },
+        ["Dead"]              = { 0.5, 0.5, 0.5 },
+        ["Death Recovery"]    = { 0.5, 0.5, 0.5 },
+        ["Idle"]              = { 0.7, 0.7, 0.7 },
+        ["Paused"]            = { 1.0, 0.8, 0.2 },
+    }
+
+AFTER (MEUI — 13 lines):
+─────────────────────────
+
+    -- Theme is just a string
+    local ui = MEUI.Window("Sanctum HM", "teal")
+
+    -- State colors (Idle, Paused, Dead are built-in)
+    ui:addStateColor("War's Retreat",     0.3, 0.8, 0.4)
+    ui:addStateColor("Banking",           0.3, 0.8, 0.4)
+    ui:addStateColor("Altar",             0.3, 0.8, 0.4)
+    ui:addStateColor("Bonfire",           0.3, 0.8, 0.4)
+    ui:addStateColor("Adrenaline",        0.3, 0.8, 0.4)
+    ui:addStateColor("Entering Portal",   0.5, 0.7, 0.9)
+    ui:addStateColor("Entering Instance", 0.5, 0.7, 0.9)
+    ui:addStateColor("Vermyx",            1.0, 0.85, 0.2)
+    ui:addStateColor("Kezalam",           1.0, 0.55, 0.2)
+    ui:addStateColor("Nakatra",           1.0, 0.3, 0.3)
+    ui:addStateColor("Transition",        0.6, 0.6, 0.8)
+    ui:addStateColor("Looting",           0.4, 0.85, 0.9)
+    ui:addStateColor("Teleporting",       0.6, 0.9, 1.0)
+    ui:addStateColor("Death Recovery",    0.5, 0.5, 0.5)
+
+
+================================================================================
+  3. CONFIG DEFINITION — What you had to declare + save + load + validate
+================================================================================
+
+BEFORE (SanctumGUI.lua — 80 lines across 3 sections):
+──────────────────────────────────────────────────────
+
+    -- Section 1: Default values (16 lines)
+    SanctumGUI.config = {
+        healthFood = 6000,
+        healthBrew = 4000,
+        healthCombo = 3500,
+        prayerRestore = 30,
+        startWithFullAdrenaline = true,
+        debugMain = true,
+        debugConsumables = false,
+        debugRotation = false,
+        debugMechanics = false,
+        debugPrayer = false,
+    }
+
+    -- Section 2: Save function (28 lines)
+    local function saveConfigToFile(cfg)
+        local data = {
+            HealthFood = cfg.healthFood,
+            HealthBrew = cfg.healthBrew,
+            HealthCombo = cfg.healthCombo,
+            PrayerRestore = cfg.prayerRestore,
+            StartWithFullAdrenaline = cfg.startWithFullAdrenaline,
+            DebugMain = cfg.debugMain,
+            DebugConsumables = cfg.debugConsumables,
+            DebugRotation = cfg.debugRotation,
+            DebugMechanics = cfg.debugMechanics,
+            DebugPrayer = cfg.debugPrayer,
+        }
+        local ok, json = pcall(API.JsonEncode, data)
+        if not ok or not json then
+            API.printlua("Failed to encode config JSON", 4, false)
+            return
+        end
+        os.execute('mkdir "' .. CONFIG_DIR:gsub("/", "\\") .. '" 2>nul')
+        local file = io.open(CONFIG_PATH, "w")
+        if not file then
+            API.printlua("Failed to open config file for writing", 4, false)
+            return
+        end
+        file:write(json)
+        file:close()
+        API.printlua("Config saved", 0, false)
+    end
+
+    -- Section 3: Load function with type validation (16 lines)
+    function SanctumGUI.loadConfig()
+        local saved = loadConfigFromFile()
+        if not saved then return end
+        local c = SanctumGUI.config
+        if type(saved.HealthFood) == "number" then c.healthFood = saved.HealthFood end
+        if type(saved.HealthBrew) == "number" then c.healthBrew = saved.HealthBrew end
+        if type(saved.HealthCombo) == "number" then c.healthCombo = saved.HealthCombo end
+        if type(saved.PrayerRestore) == "number" then c.prayerRestore = saved.PrayerRestore end
+        if type(saved.StartWithFullAdrenaline) == "boolean" then ... end
+        if type(saved.DebugMain) == "boolean" then c.debugMain = saved.DebugMain end
+        if type(saved.DebugConsumables) == "boolean" then ... end
+        if type(saved.DebugRotation) == "boolean" then ... end
+        if type(saved.DebugMechanics) == "boolean" then ... end
+        if type(saved.DebugPrayer) == "boolean" then ... end
+    end
+
+    -- Section 4: getConfig (14 lines)
+    function SanctumGUI.getConfig()
+        local c = SanctumGUI.config
+        return {
+            healthFood = c.healthFood,
+            healthBrew = c.healthBrew,
+            ...  -- every field listed again
+        }
+    end
+
+    Total: You wrote EVERY config key 4 TIMES (default, save, load, getConfig).
+    Adding a new config option = editing 4 separate places.
+
+AFTER (MEUI — 0 extra lines):
+──────────────────────────────
+
+    -- Defaults, save, load, getConfig, and type validation are ALL automatic.
+    -- Each addCheckbox/addSlider call handles everything.
+    -- Adding a new config option = 1 line.
+
+    ui:addSlider("healthFood", "Food Threshold (HP)", 6000, 0, 15000, "%d")
+    -- That's it. It's saved, loaded, validated, and accessible via ui:get("healthFood")
+
+
+================================================================================
+  4. CONFIG TAB UI — What you had to write for each widget
+================================================================================
+
+BEFORE (SanctumGUI.lua — 70 lines):
+────────────────────────────────────
+
+    sectionHeader("Health Thresholds")
+    flavorText("HP values at which to eat food and use healing items.")
+    ImGui.Spacing()
+
+    label("Food Threshold (HP)")
+    local foodChanged, foodVal = ImGui.SliderInt("##healthfood", cfg.healthFood, 0, 15000, "%d")
+    if foodChanged then cfg.healthFood = foodVal end
+
+    label("Brew Threshold (HP)")
+    local brewChanged, brewVal = ImGui.SliderInt("##healthbrew", cfg.healthBrew, 0, 15000, "%d")
+    if brewChanged then cfg.healthBrew = brewVal end
+
+    label("Combo Eat Threshold (HP)")
+    local comboChanged, comboVal = ImGui.SliderInt("##healthcombo", cfg.healthCombo, 0, 15000, "%d")
+    if comboChanged then cfg.healthCombo = comboVal end
+
+    ImGui.Spacing()
+    ImGui.Separator()
+    ImGui.Spacing()
+
+    sectionHeader("Prayer Threshold")
+    flavorText("When to restore prayer points.")
+    ImGui.Spacing()
+
+    label("Prayer Restore (%)")
+    local prayChanged, prayVal = ImGui.SliderInt("##prayerrestore", cfg.prayerRestore, 0, 100, "%d%%")
+    if prayChanged then cfg.prayerRestore = prayVal end
+
+    ImGui.Spacing()
+    ImGui.Separator()
+    ImGui.Spacing()
+
+    sectionHeader("War's Retreat")
+    flavorText("Pre-fight preparation options.")
+    ImGui.Spacing()
+
+    local adrenChanged, adrenVal = ImGui.Checkbox("Start with Full Adrenaline##fulladren", ...)
+    if adrenChanged then cfg.startWithFullAdrenaline = adrenVal end
+
+    ImGui.Spacing()
+    ImGui.Separator()
+    ImGui.Spacing()
+
+    sectionHeader("Debug Options")
+    flavorText("Enable logging for troubleshooting.")
+    ImGui.Spacing()
+
+    local dbgMainChanged, dbgMainVal = ImGui.Checkbox("Main Script##debugmain", cfg.debugMain)
+    if dbgMainChanged then cfg.debugMain = dbgMainVal end
+
+    local dbgConsChanged, dbgConsVal = ImGui.Checkbox("Consumables##debugconsumables", ...)
+    if dbgConsChanged then cfg.debugConsumables = dbgConsVal end
+
+    local dbgRotChanged, dbgRotVal = ImGui.Checkbox("Rotation Manager##debugrotation", ...)
+    if dbgRotChanged then cfg.debugRotation = dbgRotVal end
+
+    local dbgMechChanged, dbgMechVal = ImGui.Checkbox("Mechanics##debugmechanics", ...)
+    if dbgMechChanged then cfg.debugMechanics = dbgMechVal end
+
+    local dbgPrayerChanged, dbgPrayerVal = ImGui.Checkbox("Prayer Manager##debugprayer", ...)
+    if dbgPrayerChanged then cfg.debugPrayer = dbgPrayerVal end
+
+    -- ... plus Start/Cancel buttons with manual PushStyleColor/PopStyleColor
+
+AFTER (MEUI — 17 lines):
+─────────────────────────
+
+    ui:addSection("Health Thresholds", "HP values at which to eat food and use healing items.")
+    ui:addSlider("healthFood", "Food Threshold (HP)", 6000, 0, 15000, "%d")
+    ui:addSlider("healthBrew", "Brew Threshold (HP)", 4000, 0, 15000, "%d")
+    ui:addSlider("healthCombo", "Combo Eat Threshold (HP)", 3500, 0, 15000, "%d")
+
+    ui:addSection("Prayer Threshold", "When to restore prayer points.")
+    ui:addSlider("prayerRestore", "Prayer Restore (%)", 30, 0, 100, "%d%%")
+
+    ui:addSection("War's Retreat", "Pre-fight preparation options.")
+    ui:addCheckbox("startWithFullAdrenaline", "Start with Full Adrenaline", true)
+
+    ui:addSection("Debug Options", "Enable logging for troubleshooting.")
+    ui:addCheckbox("debugMain", "Main Script", true)
+    ui:addCheckbox("debugConsumables", "Consumables", false)
+    ui:addCheckbox("debugRotation", "Rotation Manager", false)
+    ui:addCheckbox("debugMechanics", "Mechanics", false)
+    ui:addCheckbox("debugPrayer", "Prayer Manager", false)
+
+    -- Start/Cancel buttons are automatic
+
+
+================================================================================
+  5. BUTTONS (Start, Cancel, Pause, Resume, Stop) — Manual color management
+================================================================================
+
+BEFORE (SanctumGUI.lua — 55 lines):
+────────────────────────────────────
+
+    -- Pause/Resume button
+    if gui.paused then
+        ImGui.PushStyleColor(ImGuiCol.Button, 0.2, 0.5, 0.2, 0.2)
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, 0.25, 0.65, 0.25, 0.35)
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, 0.15, 0.75, 0.15, 0.5)
+        if ImGui.Button("Resume Script##resume", -1, 28) then
+            gui.paused = false
+        end
+        ImGui.PopStyleColor(3)
+    else
+        ImGui.PushStyleColor(ImGuiCol.Button, 0.4, 0.4, 0.4, 0.2)
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, 0.4, 0.4, 0.4, 0.35)
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, 0.5, 0.5, 0.5, 0.5)
+        if ImGui.Button("Pause Script##pause", -1, 28) then
+            gui.paused = true
+        end
+        ImGui.PopStyleColor(3)
+    end
+
+    -- Stop button
+    ImGui.PushStyleColor(ImGuiCol.Button, 0.5, 0.15, 0.15, 0.9)
+    ImGui.PushStyleColor(ImGuiCol.ButtonHovered, 0.6, 0.2, 0.2, 1.0)
+    ImGui.PushStyleColor(ImGuiCol.ButtonActive, 0.7, 0.25, 0.25, 1.0)
+    if ImGui.Button("Stop Script##stop", -1, 28) then
+        gui.stopped = true
+    end
+    ImGui.PopStyleColor(3)
+
+    -- Start button
+    ImGui.PushStyleColor(ImGuiCol.Button, 0.15, 0.45, 0.55, 0.9)
+    ImGui.PushStyleColor(ImGuiCol.ButtonHovered, 0.2, 0.55, 0.65, 1.0)
+    ImGui.PushStyleColor(ImGuiCol.ButtonActive, 0.25, 0.65, 0.75, 1.0)
+    if ImGui.Button("Start Sanctum HM##start", -1, 32) then
+        saveConfigToFile(gui.config)
+        gui.started = true
+    end
+    ImGui.PopStyleColor(3)
+
+    -- Cancel button
+    ImGui.PushStyleColor(ImGuiCol.Button, 0.4, 0.4, 0.4, 0.2)
+    ImGui.PushStyleColor(ImGuiCol.ButtonHovered, 0.4, 0.4, 0.4, 0.35)
+    ImGui.PushStyleColor(ImGuiCol.ButtonActive, 0.5, 0.5, 0.5, 0.5)
+    if ImGui.Button("Cancel##cancel", -1, 28) then
+        gui.cancelled = true
+    end
+    ImGui.PopStyleColor(3)
+
+AFTER (MEUI — 0 lines):
+────────────────────────
+
+    -- All 5 buttons are built-in and handled automatically.
+    -- Start saves config and switches to info tab.
+    -- Pause/Resume toggles. Stop sets flag. Cancel sets flag.
+    -- Colors match the theme automatically.
+
+
+================================================================================
+  6. THEME APPLICATION — The 22 lines you had to copy into every script
+================================================================================
+
+BEFORE (SanctumGUI.lua — 22 lines, identical in every GUI file):
+────────────────────────────────────────────────────────────────
+
+    ImGui.PushStyleColor(ImGuiCol.WindowBg, TEAL.dark[1], TEAL.dark[2], TEAL.dark[3], 0.97)
+    ImGui.PushStyleColor(ImGuiCol.TitleBg, TEAL.medium[1]*0.6, TEAL.medium[2]*0.6, ...)
+    ImGui.PushStyleColor(ImGuiCol.TitleBgActive, TEAL.medium[1], TEAL.medium[2], ...)
+    ImGui.PushStyleColor(ImGuiCol.Separator, TEAL.light[1], TEAL.light[2], ...)
+    ImGui.PushStyleColor(ImGuiCol.Tab, ...)
+    ImGui.PushStyleColor(ImGuiCol.TabHovered, ...)
+    ImGui.PushStyleColor(ImGuiCol.TabActive, ...)
+    ImGui.PushStyleColor(ImGuiCol.FrameBg, ...)
+    ImGui.PushStyleColor(ImGuiCol.FrameBgHovered, ...)
+    ImGui.PushStyleColor(ImGuiCol.FrameBgActive, ...)
+    ImGui.PushStyleColor(ImGuiCol.SliderGrab, ...)
+    ImGui.PushStyleColor(ImGuiCol.SliderGrabActive, ...)
+    ImGui.PushStyleColor(ImGuiCol.CheckMark, ...)
+    ImGui.PushStyleColor(ImGuiCol.Header, ...)
+    ImGui.PushStyleColor(ImGuiCol.HeaderHovered, ...)
+    ImGui.PushStyleColor(ImGuiCol.HeaderActive, ...)
+    ImGui.PushStyleColor(ImGuiCol.Text, 1.0, 1.0, 1.0, 1.0)
+    ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, 14, 10)
+    ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, 6, 4)
+    ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 4)
+    ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 6)
+    ImGui.PushStyleVar(ImGuiStyleVar.TabRounding, 4)
+    ...
+    ImGui.PopStyleVar(5)
+    ImGui.PopStyleColor(17)
+
+AFTER (MEUI — 0 lines):
+────────────────────────
+
+    -- Handled automatically by ui:draw()
+    -- Just pass "teal" when creating the window
+
+
+================================================================================
+  7. HELPER FUNCTIONS — The same 50 lines copied into every GUI file
+================================================================================
+
+BEFORE (SanctumGUI.lua — 50 lines):
+────────────────────────────────────
+
+    local function row(label, value, lr, lg, lb, vr, vg, vb)
+        ImGui.TableNextRow()
+        ImGui.TableNextColumn()
+        ImGui.PushStyleColor(ImGuiCol.Text, lr or 1.0, lg or 1.0, lb or 1.0, 1.0)
+        ImGui.TextWrapped(label)
+        ImGui.PopStyleColor(1)
+        ImGui.TableNextColumn()
+        ...
+    end
+
+    local function progressBar(progress, height, text, r, g, b)
+        ImGui.PushStyleColor(ImGuiCol.PlotHistogram, ...)
+        ...
+    end
+
+    local function label(text) ... end
+    local function sectionHeader(text) ... end
+    local function flavorText(text) ... end
+    local function formatNumber(n) ... end
+
+AFTER (MEUI — 0 lines):
+────────────────────────
+
+    -- All built into MEUI. Available via:
+    -- MEUI.Draw.row(), MEUI.Draw.progressBar(), MEUI.Draw.text()
+    -- MEUI.Draw.button(), MEUI.Draw.sectionHeader()
+    -- MEUI.formatNumber(), MEUI.formatTime(), MEUI.perHour()
+
+
+================================================================================
+  8. TAB SYSTEM — The boilerplate you had to write for Config/Info/Warnings
+================================================================================
+
+BEFORE (SanctumGUI.lua — 35 lines):
+────────────────────────────────────
+
+    local function drawContent(data, gui)
+        if ImGui.BeginTabBar("##maintabs", 0) then
+            local configFlags = gui.selectConfigTab and ImGuiTabItemFlags.SetSelected or 0
+            gui.selectConfigTab = false
+            if ImGui.BeginTabItem("Config###config", nil, configFlags) then
+                ImGui.Spacing()
+                drawConfigTab(gui.config, gui)
+                ImGui.EndTabItem()
+            end
+
+            if gui.started then
+                local infoFlags = gui.selectInfoTab and ImGuiTabItemFlags.SetSelected or 0
+                gui.selectInfoTab = false
+                if ImGui.BeginTabItem("Info###info", nil, infoFlags) then
+                    ImGui.Spacing()
+                    drawInfoTab(data)
+                    ImGui.EndTabItem()
+                end
+            end
+
+            if #gui.warnings > 0 then
+                local warningLabel = "Warnings (" .. #gui.warnings .. ")###warnings"
+                local warnFlags = gui.selectWarningsTab and ImGuiTabItemFlags.SetSelected or 0
+                if ImGui.BeginTabItem(warningLabel, nil, warnFlags) then
+                    gui.selectWarningsTab = false
+                    ImGui.Spacing()
+                    drawWarningsTab(gui)
+                    ImGui.EndTabItem()
+                end
+            end
+
+            ImGui.EndTabBar()
+        end
+    end
+
+AFTER (MEUI — 0 lines):
+────────────────────────
+
+    -- Completely automatic. Config tab, Info tab, Warnings tab all managed.
+
+
+================================================================================
+  9. WARNINGS TAB — Copy-pasted in every script
+================================================================================
+
+BEFORE (SanctumGUI.lua — 26 lines):
+────────────────────────────────────
+
+    local function drawWarningsTab(gui)
+        if #gui.warnings == 0 then
+            ImGui.PushStyleColor(ImGuiCol.Text, 0.6, 0.6, 0.65, 1.0)
+            ImGui.TextWrapped("No warnings.")
+            ImGui.PopStyleColor(1)
+            return
+        end
+        for _, warning in ipairs(gui.warnings) do
+            ImGui.PushStyleColor(ImGuiCol.Text, 1.0, 0.75, 0.2, 1.0)
+            ImGui.TextWrapped("! " .. warning)
+            ImGui.PopStyleColor(1)
+            ImGui.Spacing()
+        end
+        ImGui.Spacing()
+        ImGui.Separator()
+        ImGui.Spacing()
+        ImGui.PushStyleColor(ImGuiCol.Button, 0.5, 0.45, 0.1, 0.8)
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, 0.65, 0.55, 0.15, 1.0)
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, 0.8, 0.7, 0.1, 1.0)
+        if ImGui.Button("Dismiss Warnings##clear", -1, 25) then
+            gui.warnings = {}
+        end
+        ImGui.PopStyleColor(3)
+    end
+
+AFTER (MEUI — 0 lines):
+────────────────────────
+
+    -- Built-in. Just call ui:addWarning("message")
+
+
+================================================================================
+  FULL SIDE-BY-SIDE: The complete SanctumGUI reimplemented with MEUI
+================================================================================
+
+BEFORE — SanctumGUI.lua (622 lines):
+    See the current file. Contains:
+    - State management boilerplate
+    - Theme palette definition
+    - State color table
+    - Config file path constants
+    - loadConfigFromFile() helper
+    - saveConfigToFile() function
+    - SanctumGUI.reset()
+    - SanctumGUI.loadConfig() with per-field type checks
+    - SanctumGUI.getConfig() listing every field again
+    - SanctumGUI.addWarning() / clearWarnings()
+    - SanctumGUI.isPaused() / isStopped() / isCancelled()
+    - row() helper function
+    - progressBar() helper function
+    - label() / sectionHeader() / flavorText() helpers
+    - formatNumber() helper
+    - getHealthColor() helper
+    - drawConfigTab() with manual widget code
+    - drawInfoTab() with manual table/bar code
+    - drawWarningsTab()
+    - drawContent() tab orchestration
+    - SanctumGUI.draw() with 22-line theme push/pop
+
+AFTER — SanctumGUI_MEUI.lua (~90 lines):
+
+    local MEUI = require("MEUI")
+
+    local ui = MEUI.Window("Sanctum HM", "teal")
+
+    -- Config fields
+    ui:addSection("Health Thresholds", "HP values at which to eat food and use healing items.")
+    ui:addSlider("healthFood", "Food Threshold (HP)", 6000, 0, 15000, "%d")
+    ui:addSlider("healthBrew", "Brew Threshold (HP)", 4000, 0, 15000, "%d")
+    ui:addSlider("healthCombo", "Combo Eat Threshold (HP)", 3500, 0, 15000, "%d")
+
+    ui:addSection("Prayer Threshold", "When to restore prayer points.")
+    ui:addSlider("prayerRestore", "Prayer Restore (%)", 30, 0, 100, "%d%%")
+
+    ui:addSection("War's Retreat", "Pre-fight preparation options.")
+    ui:addCheckbox("startWithFullAdrenaline", "Start with Full Adrenaline", true)
+
+    ui:addSection("Debug Options", "Enable logging for troubleshooting.")
+    ui:addCheckbox("debugMain", "Main Script", true)
+    ui:addCheckbox("debugConsumables", "Consumables", false)
+    ui:addCheckbox("debugRotation", "Rotation Manager", false)
+    ui:addCheckbox("debugMechanics", "Mechanics", false)
+    ui:addCheckbox("debugPrayer", "Prayer Manager", false)
+
+    -- State colors
+    ui:addStateColor("War's Retreat",     0.3, 0.8, 0.4)
+    ui:addStateColor("Banking",           0.3, 0.8, 0.4)
+    ui:addStateColor("Altar",             0.3, 0.8, 0.4)
+    ui:addStateColor("Bonfire",           0.3, 0.8, 0.4)
+    ui:addStateColor("Adrenaline",        0.3, 0.8, 0.4)
+    ui:addStateColor("Entering Portal",   0.5, 0.7, 0.9)
+    ui:addStateColor("Entering Instance", 0.5, 0.7, 0.9)
+    ui:addStateColor("Vermyx",            1.0, 0.85, 0.2)
+    ui:addStateColor("Kezalam",           1.0, 0.55, 0.2)
+    ui:addStateColor("Nakatra",           1.0, 0.3, 0.3)
+    ui:addStateColor("Transition",        0.6, 0.6, 0.8)
+    ui:addStateColor("Looting",           0.4, 0.85, 0.9)
+    ui:addStateColor("Teleporting",       0.6, 0.9, 1.0)
+    ui:addStateColor("Death Recovery",    0.5, 0.5, 0.5)
+
+    -- Summary rows when running
+    ui:setSummaryRows(function(cfg)
+        return {
+            {"Food Threshold", tostring(cfg.healthFood) .. " HP"},
+            {"Brew Threshold", tostring(cfg.healthBrew) .. " HP"},
+            {"Prayer Restore", tostring(cfg.prayerRestore) .. "%"},
+            {"Full Adrenaline", cfg.startWithFullAdrenaline and "Yes" or "No"},
+        }
+    end)
+
+    -- Custom info tab (Sanctum has extra fields like location, currentBoss)
+    ui:setCustomInfoTab(function(data, palette, h)
+        -- State display
+        local stateText = data.state or "Idle"
+        if ui:isPaused() then stateText = "Paused" end
+        MEUI.Draw.text(stateText,
+            (ui._stateColors[stateText] or {0.7,0.7,0.7})[1],
+            (ui._stateColors[stateText] or {0.7,0.7,0.7})[2],
+            (ui._stateColors[stateText] or {0.7,0.7,0.7})[3])
+        ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing()
+
+        -- Boss health bar
+        if data.bossHealth and data.bossMaxHealth and data.bossHealth > 0 then
+            local pct = math.max(0, math.min(1, data.bossHealth / data.bossMaxHealth))
+            h.progressBar(pct, 28,
+                string.format("%s: %s / %s (%.2f%%)",
+                    data.currentBoss or "Boss",
+                    h.formatNumber(data.bossHealth),
+                    h.formatNumber(data.bossMaxHealth),
+                    pct * 100),
+                palette.glow[1], palette.glow[2], palette.glow[3])
+            ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing()
+        end
+
+        -- Info table
+        if ImGui.BeginTable("##info", 2) then
+            ImGui.TableSetupColumn("l", ImGuiTableColumnFlags.WidthStretch, 0.3)
+            ImGui.TableSetupColumn("v", ImGuiTableColumnFlags.WidthStretch, 0.7)
+            h.row("Location", data.location or "Unknown")
+            h.row("Status", data.status or "Idle")
+            if data.currentBoss then h.row("Current Boss", data.currentBoss) end
+            if data.killTimer then h.row("Kill Timer", data.killTimer) end
+            ImGui.EndTable()
+        end
+
+        ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing()
+
+        -- Metrics
+        if ImGui.BeginTable("##metrics", 2) then
+            ImGui.TableSetupColumn("l", ImGuiTableColumnFlags.WidthStretch, 0.3)
+            ImGui.TableSetupColumn("v", ImGuiTableColumnFlags.WidthStretch, 0.7)
+            h.row("Runs", string.format("%d (%s/hr)",
+                data.runsCompleted or 0, data.runsPerHour or "0"))
+            if data.gp then
+                h.row("GP", string.format("%s (%s/hr)",
+                    h.formatNumber(data.gp or 0),
+                    h.formatNumber(data.gpPerHour or 0)))
+            end
+            ImGui.EndTable()
+        end
+    end)
+
+    -- Load saved config
+    ui:loadConfig()
+
+    return ui
+
+
+================================================================================
+  SUMMARY — What MEUI eliminates
+================================================================================
+
+  What you wrote manually              | Lines | MEUI handles it?
+  ─────────────────────────────────────┼───────┼──────────────────
+  State management (open/started/...)  |   23  | Yes, automatic
+  Theme palette definition             |    7  | Yes, built-in
+  State colors table                   |   19  | Yes, addStateColor()
+  Config file paths                    |    2  | Yes, automatic
+  loadConfigFromFile() helper          |    9  | Yes, automatic
+  saveConfigToFile() function          |   17  | Yes, automatic
+  loadConfig() with type validation    |   15  | Yes, automatic
+  getConfig() listing all fields       |   14  | Yes, automatic
+  reset() function                     |   10  | Yes, automatic
+  addWarning() / clearWarnings()       |    9  | Yes, automatic
+  isPaused() / isStopped() / etc       |   10  | Yes, automatic
+  row() helper                         |   14  | Yes, built-in
+  progressBar() helper                 |    6  | Yes, built-in
+  label/sectionHeader/flavorText       |   16  | Yes, built-in
+  formatNumber() helper                |    8  | Yes, built-in
+  drawConfigTab() widget code          |   96  | Yes, from addSlider/addCheckbox
+  drawInfoTab()                        |  120  | Yes, default or custom
+  drawWarningsTab()                    |   26  | Yes, automatic
+  drawContent() tab orchestration      |   34  | Yes, automatic
+  draw() with theme push/pop           |   45  | Yes, automatic
+  Start/Cancel/Pause/Stop buttons      |   55  | Yes, automatic
+  ─────────────────────────────────────┼───────┼──────────────────
+  TOTAL ELIMINATED                     | ~545  |
+  TOTAL REMAINING (MEUI version)       |  ~90  | (config + custom info tab)
+
+
+================================================================================
+  WHEN TO USE CUSTOM INFO TAB vs DEFAULT
+================================================================================
+
+  The DEFAULT info tab handles: state, boss health bar, kills, deaths, GP,
+  kill times, recent kills, and unique drops — all automatically from your
+  data table.
+
+  Use setCustomInfoTab() only when you need EXTRA fields like:
+  - Sanctum's "Location" and "Current Boss" rows
+  - Rasial's "Active Buffs" section
+  - Custom metrics specific to your boss
+
+  For most scripts, the default info tab will be enough with zero extra code.
+
+
+================================================================================
+  KEY BENEFIT: Adding a new config option
+================================================================================
+
+  BEFORE (manual): Edit 4 places (defaults, save, load, getConfig) + draw code
+  AFTER (MEUI):    Add 1 line:
+
+    ui:addCheckbox("newOption", "My New Option", false, "Description")
+
+  Done. It appears in the GUI, saves to JSON, loads on restart, and is
+  accessible via ui:get("newOption") or ui:getConfig().newOption.
